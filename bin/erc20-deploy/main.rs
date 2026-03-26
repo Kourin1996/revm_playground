@@ -1,4 +1,7 @@
-use ethers::abi::{ParamType, Token, decode as abi_decode, encode as abi_encode};
+use ethers::{
+    abi::{ParamType, Token, decode as abi_decode, encode as abi_encode, parse_abi},
+    contract::BaseContract,
+};
 use revm::{
     ExecuteCommitEvm, ExecuteEvm,
     context::{Context, TxEnv},
@@ -25,24 +28,29 @@ fn init_evm() -> InMemoryEvm {
         .with_db(InMemoryDB::default())
         .modify_cfg_chained(|cfg| {
             cfg.set_spec_and_mainnet_gas_params(revm::primitives::hardfork::SpecId::PRAGUE);
-            cfg.disable_balance_check = true;
-            cfg.disable_nonce_check = true;
-            cfg.disable_base_fee = true;
         })
         .build_mainnet()
 }
 
 /// Calls `balanceOf(holder)` on a deployed ERC20 contract and returns the balance.
 fn balance_of(evm: &mut InMemoryEvm, contract: Address, holder: Address) -> U256 {
-    // selector = keccak256("balanceOf(address)")[0..4] = 0x70a08231
-    let selector = [0x70u8, 0xa0, 0x82, 0x31];
-    let encoded_arg = abi_encode(&[Token::Address(ethers::types::H160::from(holder.0.0))]);
-    let call_data: Bytes = [selector.as_ref(), encoded_arg.as_slice()].concat().into();
+    let erc20_abi = BaseContract::from(
+        parse_abi(&["function balanceOf(address) external view returns (uint256)"])
+            .expect("failed to parse ABI"),
+    );
+    let calldata = erc20_abi
+        .encode(
+            "balanceOf",
+            (Token::Address(ethers::types::H160::from(
+                holder.into_array(),
+            )),),
+        )
+        .expect("failed to encode balanceOf input");
 
     let call_tx = TxEnv {
         caller: holder,
         kind: TxKind::Call(contract),
-        data: call_data,
+        data: Bytes::from(calldata.to_vec()),
         gas_limit: 100_000,
         ..Default::default()
     };
