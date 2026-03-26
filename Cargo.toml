@@ -6,5 +6,9 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.102"
 ethers = "2.0.14"
-revm = "36.0.0"
+revm = { version = "36.0.0", features = ["optional_balance_check", "optional_no_base_fee"] }
 tokio = { version = "1.50.0", features = ["full"] }
+
+[[bin]]
+name = "erc20-deploy"
+path = "bin/erc20-deploy/main.rs"
